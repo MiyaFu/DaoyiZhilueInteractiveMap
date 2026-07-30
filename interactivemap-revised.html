@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daoyi Zhilue: Interactive Map with Annotated Translation </title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink-navy: #16232f;
+    --ink-navy-deep: #0e161e;
+    --parchment: #ece2c8;
+    --parchment-dim: #d9cba3;
+    --gold: #c19a3f;
+    --rust: #8f4a3a;
+    --sage: #6b7d5f;
+    --text-dark: #221a10;
+    --text-muted: #6b5f45;
+    --status-draft: #9a8a6a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--ink-navy-deep);
+    font-family: 'EB Garamond', 'Noto Serif SC', serif;
+    color: var(--text-dark);
+  }
+
+  #app { position: relative; width: 100%; height: 100vh; overflow: hidden; }
+
+  #map { position: absolute; inset: 0; }
+
+
+  #masthead {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 1000;
+    padding: 18px 28px 14px;
+    background: linear-gradient(180deg, rgba(14,22,30,0.92) 0%, rgba(14,22,30,0.0) 100%);
+    pointer-events: none;
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px;
+  }
+  #masthead h1 {
+    font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+    font-weight: 600; font-style: italic;
+    font-size: clamp(22px, 3vw, 34px);
+    color: var(--parchment);
+    margin: 0;
+    letter-spacing: 0.5px;
+  }
+  #masthead .subtitle {
+    font-size: 13px; color: var(--gold);
+    letter-spacing: 2px; text-transform: uppercase;
+    margin-top: 2px;
+  }
+  #legend {
+    pointer-events: auto;
+    display: flex; gap: 14px; align-items: center;
+    background: rgba(14,22,30,0.7);
+    border: 1px solid rgba(193,154,63,0.35);
+    border-radius: 3px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--parchment-dim);
+  }
+  #legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+  .dot-likely { background: var(--gold); }
+  .dot-unidentified { background: var(--status-draft); }
+
+   /* ================================================================
+     ABOUT PAGE — full-page overlay, scrollable, sectioned template.
+     Fill in the placeholder text (in 【】) and swap the dashed
+     image-placeholder boxes for real <img> tags when you have assets.
+     ================================================================ */
+  #about-overlay {
+    position: fixed; inset: 0; z-index: 2000;
+    background: var(--ink-navy-deep);
+    display: none;
+    overflow-y: auto;
+  }
+  #about-overlay.open { display: block; }
+ 
+  #about-close {
+    position: fixed; top: 22px; right: 28px; z-index: 2010;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(14,22,30,0.85);
+    border: 1px solid rgba(193,154,63,0.4);
+    cursor: pointer;
+    font-family: 'Cormorant Garamond', serif; font-size: 22px;
+    color: var(--parchment-dim); line-height: 1;
+  }
+  #about-close:hover { color: var(--gold); border-color: var(--gold); }
+ 
+  .about-hero {
+    padding: 90px 8vw 50px;
+    border-bottom: 1px solid rgba(193,154,63,0.25);
+  }
+  .about-hero .about-eyebrow {
+    font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 12px;
+  }
+  .about-hero h1 {
+    font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+    font-weight: 600; font-style: italic;
+    font-size: clamp(30px, 4vw, 46px);
+    color: var(--parchment); margin: 0 0 10px;
+  }
+  .about-hero .about-subtitle {
+    font-size: 16px; color: var(--parchment-dim); max-width: 640px; line-height: 1.6;
+  }
+ 
+  .about-body { max-width: 1160px; margin: 0 auto; padding: 60px 8vw 100px; }
+ 
+  .about-section {
+    display: flex; align-items: flex-start; gap: 48px;
+    padding: 48px 0;
+    border-bottom: 1px solid rgba(217,203,163,0.12);
+  }
+  .about-section:last-child { border-bottom: none; }
+  .about-section.reverse { flex-direction: row-reverse; }
+  .about-section.stacked { flex-direction: column; gap: 20px; }
+ 
+  .about-section .about-text-col {
+    flex: 1.3;
+    min-width: 0;
+  }
+  .about-section .about-image-col {
+    flex: 1;
+    min-width: 0;
+  }
+ 
+  .about-section .about-section-eyebrow {
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 8px;
+  }
+  .about-section h2 {
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 600;
+    font-size: 26px; color: var(--parchment);
+    margin: 0 0 16px;
+  }
+  .about-section p {
+    font-size: 15px; line-height: 1.85; color: var(--parchment-dim);
+    margin: 0 0 14px;
+  }
+  .about-section p:last-child { margin-bottom: 0; }
+  .about-section .placeholder-note {
+    color: var(--gold); font-style: italic; opacity: 0.85;
+  }
+ 
+  /* image placeholder box — swap for <img class="about-image" src="..."> when ready */
+  .about-image-placeholder {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border: 1.5px dashed rgba(193,154,63,0.5);
+    border-radius: 4px;
+    background: rgba(193,154,63,0.05);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px;
+    color: var(--gold);
+    text-align: center;
+    padding: 20px;
+  }
+  .about-image-placeholder svg { width: 34px; height: 34px; opacity: 0.7; }
+  .about-image-placeholder .placeholder-label {
+    font-size: 12px; letter-spacing: 0.5px; color: var(--parchment-dim);
+    max-width: 220px; line-height: 1.5;
+  }
+  .about-image {
+    width: 100%; height: auto; border-radius: 4px; display: block;
+    border: 1px solid rgba(193,154,63,0.3);
+  }
+ 
+  /* full-width hero image placeholder (top of page) */
+  .about-hero-image {
+    margin: 32px 8vw 0;
+    max-width: 1160px;
+    margin-left: auto; margin-right: auto;
+  }
+  .about-hero-image .about-image-placeholder { aspect-ratio: 21 / 8; }
+ 
+  /* simple two/three-column text grid, no image (e.g. "How to Use") */
+  .about-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px;
+  }
+  .about-grid .about-grid-item h3 {
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 600;
+    font-size: 16px; color: var(--gold); margin: 0 0 8px;
+  }
+  .about-grid .about-grid-item p {
+    font-size: 13.5px; line-height: 1.7; color: var(--parchment-dim); margin: 0;
+  }
+ 
+  @media (max-width: 780px) {
+    .about-section, .about-section.reverse { flex-direction: column; gap: 20px; }
+    .about-grid { grid-template-columns: 1fr; }
+    .about-hero { padding: 70px 6vw 36px; }
+    .about-body { padding: 40px 6vw 70px; }
+  }
+
+  .place-marker {
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 3px solid var(--ink-navy-deep);
+    box-shadow: 0 0 0 2px rgba(236,226,200,0.5);
+    cursor: pointer;
+  }
+  .place-marker.likely { background: var(--gold); }
+  .place-marker.unidentified { background: var(--status-draft); }
+  .marker-number {
+    position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    font-size: 12px; color: var(--parchment);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    white-space: nowrap;
+  }
+
+ 
+  #panel {
+    position: absolute; top: 0; right: 0; bottom: 0; z-index: 1100;
+    width: min(420px, 92vw);
+    background: var(--parchment);
+    box-shadow: -8px 0 30px rgba(0,0,0,0.45);
+    transform: translateX(105%);
+    transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+    overflow-y: auto;
+    padding: 0 0 40px;
+  }
+  #panel.open { transform: translateX(0); }
+
+  #panel-close {
+    position: absolute; top: 16px; right: 18px;
+    background: none; border: none; cursor: pointer;
+    font-family: 'Cormorant Garamond', serif; font-size: 26px;
+    color: var(--text-muted);
+    line-height: 1;
+  }
+  #panel-close:hover { color: var(--rust); }
+
+  .panel-header {
+    padding: 34px 32px 18px;
+    border-bottom: 1px solid var(--parchment-dim);
+    background: linear-gradient(180deg, #f2e9d2 0%, var(--parchment) 100%);
+  }
+  .panel-eyebrow {
+    font-size: 18px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--rust); margin-bottom: 6px; font-family: 'EB Garamond', serif;
+  }
+  .panel-header h2 {
+    font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+    font-weight: 600; font-size: 30px; margin: 0 0 4px;
+    color: var(--text-dark);
+  }
+  .panel-header .name-pinyin {
+    font-size: 26px; color: var(--text-muted); font-style: italic;
+  }
+  .status-badge {
+    display: inline-block; margin-top: 10px;
+    font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 2px;
+    border: 1px solid var(--gold); color: var(--rust);
+  }
+  .status-badge.draft { border-color: var(--status-draft); color: var(--status-draft); }
+
+  .panel-section { padding: 22px 32px; border-bottom: 1px solid rgba(107,95,69,0.15); }
+  .panel-section:last-child { border-bottom: none; }
+  .panel-section h3 {
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 600;
+    font-size: 15px; color: var(--rust);
+    margin: 0 0 10px; letter-spacing: 0.5px;
+  }
+  .panel-section .text-original {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 15px; line-height: 1.85; color: var(--text-dark);
+    white-space: pre-line;
+  }
+  .panel-section .text-translation {
+    font-size: 16px; line-height: 1.75; color: var(--text-dark);
+    white-space: pre-line;
+  }
+  .panel-section .annotation {
+    font-size: 14px; line-height: 1.7; color: var(--text-muted);
+    white-space: pre-line;
+    border-left: 2px solid var(--gold); padding-left: 14px;
+  }
+  .chapter-tag {
+    font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px;
+  }
+
+
+  .leaflet-popup-content-wrapper { background: var(--parchment); border-radius: 3px; }
+  .leaflet-popup-content { font-family: 'EB Garamond', serif; margin: 10px 14px; }
+  .leaflet-popup-tip { background: var(--parchment); }
+  .popup-title { font-weight: 600; font-size: 20px; margin-bottom: 4px; }
+  .popup-hint { font-size: 16px; color: var(--text-muted); font-style: italic; }
+
+  @media (max-width: 600px) {
+    #masthead { padding: 14px 16px 10px; }
+    #legend { font-size: 11px; padding: 5px 10px; gap: 10px; }
+    .panel-header, .panel-section { padding-left: 22px; padding-right: 22px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+
+  <div id="masthead">
+    <div>
+      <h1> Daoyi Zhilue - Wang Dayuan</h1>
+      <div class="subtitle">Annotated Translation — Interactive Journey</div>
+    </div>
+    <div id="legend">
+      <span><span class="dot dot-likely"></span>Likely</span>
+      <span><span class="dot dot-unidentified"></span>Unidentified</span>
+      <span id="about-btn" class="legend-link">About</span>
+    </div>
+  </div>
+
+  <div id="panel">
+    <button id="panel-close" aria-label="close">✕</button>
+    <div id="panel-body"></div>
+  </div>
+</div>
+
+  <!-- ============================================================
+       ABOUT PAGE
+       Replace the 【placeholder text】 with your real content.
+       For each .about-image-placeholder box, once you have an
+       image, replace it with:
+         <img class="about-image" src="images/your-file.jpg" alt="...">
+       ============================================================ -->
+  <div id="about-overlay">
+    <button id="about-close" aria-label="close">✕</button>
+ 
+    <div class="about-hero">
+      <div class="about-eyebrow">About</div>
+      <h1>The Indian West Coast in a 14th Century Chinese Mariner’s Eyes: An Annotated Translation of Daoyi Zhilue</h1>
+      <div class="about-subtitle">Miya Fu - Emory SURE Program 2026</div>
+      <a class="about-link" href="https://docs.google.com/presentation/d/1OciXegbWTjHMTk0hAekvdr3-0vg721MP/edit?slide=id.p1#slide=id.p1" target="_blank" rel="noopener noreferrer">Presentation Slide</a>
+    </div>
+ 
+    
+ 
+ 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+
+const LOCATIONS = [
+  {
+    id: "74",
+    chapter: "Gujarat",
+    name_zh: "华罗",
+    name_pinyin: "Hualuo[1]",
+    lat: 22.3094,
+    lng: 72.1362,
+    status: "likely",
+    original_text: "揎椰树为疆理，叠青石为室。田土瘠硗，宜种稻。气候常热，秋冬草木越增茂盛。俗怪。民间每创石亭数四，塑以泥牛，或刻石为像，朝夕讽之，敬之若神佛焉，仍以香花灯烛为之供养。凡所主之坛，所行之地，及屋壁之上，悉以牛粪和泥涂之，反为洁净。邻人往来，苟非其类，则不敢造其所。男女形黑，无酋长，年尊者主之。语言（言屠）呶。以檀香、牛粪搽其额，以白细布缠头，穿长衫，与今之南毗人少异而大同。",
+    translation: "(The people) plant coconut trees as their boarder, and pile up bluestones to be rooms. The farmland is infertile and stony, suitable for growing rice. The climate is always hot; grass and trees flourish in fall and winter. Habits are weird. The people often build four pavilions with stone, and sculpt clay oxen, or carve statues out of stone, and pray to it day and night, and respect it as if it is Buddha or an deity, and still they make offerings to it with flowers and candles. All the altars they host, all the lands they walk on, and all the walls are painted with cow dung and mud, and people adversely view it as clean. When neighbors interact with each other, if (the neighbors are) not of their kind, then they dare not visit their place[2].  Men and women look dark. They have no tribal chief, and people with respectful age are in charge of things. Their language is complicated and loud. They smear sandalwood and cow dung on their foreheads; they wrap their heads with white fine cloth, and wear long shirts. They have few differences but many similarities with the Nanbi [3] people today.",
+    annotation: "[1] Fujita Toyohachi believes it to be Gujarat.<br>[2] This might be an observation that the Hinduism community and the Muslim community were living close to each other. <br> [3] There has been long discussion about what this name refers to. According to Liu Yingsheng, there are two widely accepted assumptions: Friedrich Hirth in his translation of Zhufanchi identified Nanbi to be Calicut, because Nanbi in Zhufanzhi is described as a prosperous country in Malabar; Feng Chengjun introduced the idea that Nanbi might be the translation of Nair or Namburi. Liu, in his work, argues that Nanbi should be Dravida, with both linguistical evidence that, it was not uncommon for ancient Chinese translators to choose characters with consonant N to translate names that actually started with D, and that some archeological evidence found in Zaiton showed clear connection with South India, where Dravida people lived. He also claimed that Nanbi’s area might have shrunken drastically between the time of Zhufanzhi (12th century) and Ming Dynasty (15th century), causing some textual evidence to seem conflicting."
+  },
+  {
+    id: "63",
+    chapter:"Maldives",
+    name_zh:"北溜",
+    name_pinyin: "Beiliu[1]",
+    lat:4.1755,
+    lng:73.5088,
+    status:"likely",
+    original_text:"地势居下，千屿万岛。舶往西洋，过僧加剌[2]傍，潮流迅急，更值风逆，辄漂此国。候次年夏东南风，舶仍出溜。水中有石槎牙，利如锋刃，盖巳不舟矣。地产椰子索、貝八子、鱼乾、大手巾布。海商每将一舶贝八子下乌爹、朋加剌，必互易米一船有余。盖彼番以子权钱用，亦久远之食法也。",
+    translation:"The land is low in elevation and has tens of thousands of islands. When sailing to the West Ocean, bypassing Sengjiala[2], the tide water is hurry and sudden, what’s more the wind direction is adverse, thus drift to this country. Wait until next year’s summer when there is South-eastern wind, the boat will come out along the water. In the water there are jagged stones, sharp as the blade of knife, which will then destroy the ship. The land produces coconut ropes[3], shells, dried fish[4], and large hand towel cloth . Marine merchants, whenever they bring one ship of shells to Wudie[5]  or Pengjiala[6] , always trade for rice[7], and bring back more than one ship of it. This is because that country use shells in place of coins, and this is also the long-lasting way to feed themselves.",
+    annotation:"[1]Possibly Maldives: Fujita Toyohachi believes that the name if pronounced with dialect, Ma can be pronounced as Bei, thus the sound resembles its capital city Male; Su agrees. <br>[2]Detailed in another chapter of this book.<br> [3]Su quotes from Alberuni: Coconut rope is made of coconut fiber, and is used to bind together planks in ship building. Ma Huan also introduced coconut rope, saying that people from other countries come to buy this rope to build ships, and with this rope, they don’t need nails to bind together planks; they only use this rope and wooden wedge, then asphalt the gaps.<br>Ibn Battuta: the inhabitants live on a fish which is like the lirun. They call it qulb al-mas. It has red flesh without fat and smells like mutton. When they catch it, they cut the fish in quarters, cook it a little, then put it to smoke in baskets made of palm leaf. When it has fully dried, they eat it. Some of these fish are exported to India, China, and Yemen. Ma Huan: They cut Majiao fish to large pieces, dry them and store them, and other countries also come to buy the fish to sell to other places. <br>[4]Ma Huan: They weave the best silken hand towels, dense and long, and the quality is definitely better than all other places. <br> [5]Detailed in another chapter of this book.<br> [6]Detailed in another chapter of this book.<br> [7]Ibn Battuta: There is no cultivation of crops on any of the islands… Ma Huan: The land is very infertile. There is little rice, and no wheat."
+  },
+  {
+    id: "64",
+    chapter:"Alwaye",
+    name_zh:"下里",
+    name_pinyin: "Xiali[1]",
+    lat:10.1167,
+    lng:76.3500,
+    status:"unidentified",
+    original_text:"国居小㖵喃、古里佛之中，又名小港口。山旷而原平，地方数千余里，民所奠居，星罗棋布，家给人足。厥田中下，农力耕。气候暖，风俗淳。民尚气，出入必悬弓箭及牌以随身。男女削发，系溜布。地产胡椒，冠于各番，不可胜计。椒木满山，蔓衍如籐萝，冬花而夏实。民采而蒸曝，以乾为度。其味辣，采者多不禁其味之触人，甚至以川芎煎汤解之。他番之有胡椒者，皆此国流波之余也。",
+    translation:"The country is located between Little Genan and Gulifo; another name is “The Little Port.” The mountains are big and the land is flat; the area covers several thousands of li[2];  people live peacefully, whose houses scatter like stars across the sky and chess on the board; each household is rich, and each person is satisfied. The land’s fertility is middle to low, and farmers work hard to farm. The climate is warm, and the habits are simple. People value mettle; when coming to and leaving a place, they always take with them bow and arrows as well as a shield. Men and women cut their hair and wear Liu clothes[3]. The land produces pepper, which is superior to all other countries, numerous and cannot be surpassed. Pepper trees are all over the mountain, and spread like climbing vines; they blossom in winter and fruit in summer. People gather, steam and dry them under the sun, until they are fully dried. They taste spicy; the gatherers often cannot endure the offending scent; (some gatherers) even cook Chuanxiong[4] soup to heal themselves. All pepper found in other countries are the remainder of the overflow from this country.",
+    annotation:"[1]Chen believes Xiali to be Mount Delly, north to Calicut. Fujita believes Xiali is Calicut. Su identifies Xiali to be Alwaye. However, neither Mount Delly nor Alwaye locate between Little Genan(possibly Fandarina) and Gulifo(possibly Calicut). Gulifo is more likely to be Calicut compared to Xiali. There is no convincing conclusion about Xiali's location. <br>[2]An ancient Chinese unit for length. One li is around 0.34 mile. <br> [3]“Liu cloth”, might be the name of a kind of bandana, or a specific piece of clothes. <br>[4]An herbal medicine."
+  },
+  {
+    id: "65",
+    chapter: "Colombo",
+    name_zh: "高郎步",
+    name_pinyin: "Gaolangbu[1]",
+    lat: 6.9271,
+    lng: 79.8612,
+    status: "likely",
+    original_text: "大佛山之下，湾环中纵横皆卤股石。其地湿皋田瘠，米谷翔贵，气候暖，俗薄。舶人不幸失风，或驻阁于其地者，徒为酋长之利。舶中所有货物，多至全璧而归之，酋以为天赐也，孰知舶人妻子饥寒之所望哉！男女撮髻，系八郎那间布。稍煮海为盐，酿蔗浆为酒。有酋长。地产红石头，与僧加剌同。贸易之货，用八丹布、斗锡、酒、蔷薇水、苏木、金银之属。",
+    translation: "Under the Da Fo Mountain[2], around the bay, laying vertically and horizontally are all coral reefs. The grounds around the shores are very wet, the land is infertile, the rice and grains are very expensive. The climate is warm, and the habits are indifferent[3]. Unfortunate sailors who had ship accidents due to wind, or temporarily settle their house at this land, only found themselves benefiting the tribal chief. The cargos of their ship all went to the chief's hand; the chief believed they were the present from the heaven, but does he know what the sailor’s wife and children in hunger and coldness are looking forward to! Men and women make hair buns, and wear Balang Najian[4] cloth. They sometimes boil sea water for salt, and brew wine from sugar cane juice. There is a tribal chief. The land produces red stones, which is the same as Sengjiala[5]. The traded goods are Badan[6] cloth, natural tin, wine, qiangwei water, Sappan wood, gold, silver, and such things.",
+    annotation: "[1]Fujita and Su agree that this is Colombo. This Gaolangbu is written as Gaolangfu in Little Genan chapter. Wang is the very first to use this name to refer to this place.<br>[2]Fujita and Su agree that Da Fo Mountain is Adam’s Peak in Sri Lanka. Detailed in chapter 79.<br>[3]Bao 薄 can mean thin, indifferent, or undignified. I choose indifferent here. <br> [4]Su believes that this refers to Pekalongan, where printed cotton cloth was one of the major products.<br>[5]Mentioned in other chapters of the book./<br>[6]Su believes that Badan is the brief for Shalibadan, detailed in another chapter of this book."
+  },
+  {
+    id: "66",
+    chapter:"Nagapattinam",
+    name_zh:"沙里八丹",
+    name_pinyin: "Shali Badan[1]",
+    lat:10.7906,
+    lng:79.8428,
+    status:"unidentified",
+    original_text:"国居古里佛山之后，其地沃衍，田少，俗美，气候微暖。男女系布缠头，循海而居，珠货之马头也。民有犯罪者，以石灰画圈于地，使之立圈内，不令转足，此其极刑也。地产八丹布，珍珠由第三港来，皆物之所自产也。其地采珠，官抽毕，皆以小舟渡此国互易，富者用金银以低价塌之。舶至，求售于唐人，其利岂浅鲜哉！",
+    translation:"This country locates behind the mountains of Gulifo[2], the land is fertile, with few farms. The habit is beautiful; the climate is a little warm. Men and women wrap their heads with cloth. They live alongside the sea. It is the port for jewelries. If someone commits a crime, (the officer would) draw a circle on the ground with lime, and make the criminal stand inside the circle and forbid them from turning their feet. This is their harshest punishment[3]. The land produces Badan cloth, and their pearls come from The Third Port[4], and all are produced naturally. They pick the pearls locally, and after the government takes the official share, they are all carried to this country in small boats, and rich people buy them at low price with gold and silver. When our ships arrive, they beg we Chinese to buy them. How would their profit be small!",
+    annotation:"[1]Fujita believes Shali Badan to be Solipatam, a significant port in Chola. Su agrees and points out that all other “Badan” are the brief of this Shali Badan. <br>[2]Su believes that this country and Calicut are the two end points of the route across India Penisula, and during the seasons when the wind direction is unfavorable, the trade between Shali Badan and Calicut probably relied on travelling on land, thus Wang would state that this country is “behind the mountains.”<br>[3]Su mentioned that this is also described by Marco Polo, “if the debtor doesn’t repay the creditor after the creditor has asked them, if the creditor encounters the debtor, they draw a circle at where they stand, and if the debtor doesn’t pay on that day or cannot provide a mortgage, they cannot step outside this circle. Whoever dares walking out is committing a crime and can be sentenced to death.<br>[4]Su believes this to be Madurai; Liu believes this to be Ma’abar. There is a chapter (72) in the book describing the process of pearl collecting."
+  },
+{
+  id: "60",
+  chapter:"Fandaraina",
+  name_zh:"班达里",
+  name_pinyin: "Bandali[1]",
+  lat:11.439,
+  lng:75.695,
+  status:"likely",
+  original_text:"地与鬼屈波思国为邻，山峙而石盘，田瘠谷少，气候微热，淫雨间作。俗怪。屋傍每有鬼夜啼，如人声相续，至五更而啼止。次日，酋长必遣人乘骑鸣锣以逐之，卒不见其踪影也。厥后立庙宇于盘石之上以祭焉。否则人畜有疾，国必有灾。男女丫髻，繋巫仑布，不事针缕纺绩，煮海为盐。地产甸子、鸦忽石、兜罗绵、木绵花、青蒙石。贸易之货用诸色缎、青白磁、铁器、五色烧珠之属。",
+  translation:"This land neighbors the countries of Guiqu and Bosi[2], the mountain is tall and the stones are giant, land infertile and there are little grains. The climate is a little hot, and heavy rains fall from time to time. The habits are weird. Beside the houses there is often a ghost screaming at night, continuous as if they are people’s voices, and it doesn’t stop until five jing[3] . The next day, the tribal chief always ask someone to ride a horse and beat gongs to drive it away, and then the ghost disappears. After that, they build a temple on giant stone and make sacrifice to it. Otherwise, people and animals get sick, and disasters will happen to this country. Men and women have double hair buns, wear Wulun cloth, and they don’t do weaving. They boil seawater to get salt. The land produces Turquoise, ruby, Tula cotton, silk-cotton tree, and mica. The traded goods are silk with various colors, blue-and-white porcelain, iron ware, five-colored beads and such things.",
+  annotation:"[1]Fujita fails to identify this place, while Su identifies it to be Fandaraina.<br>[2]Su believes that Guiqu is Kottakkal, south of today’s Badagara, and Bosi is Mayyazhi, south of Tellicherri.<br>[3] 3 am to 5 am."
+},
+{
+  id: "85",
+  chapter:"Banavasi(Honavar)",
+  name_zh:"巴南巴西",
+  name_pinyin: "Bananbaxi[1]",
+  lat:14.28,
+  lng:74.4439,
+  status:"likely",
+  original_text:"国居大响山之南，环居数十里，土瘠，宜种豆。气候乍凉，俗尚浇薄。男女体小而形黑，眼圆耳长，手垂过膝，身披丝绒单被。凡民间女子，其形𫳃𫱿。自七岁，父母以歌舞教之，身折叠而圆转，变态百出，粗有可观。倘适他国，呈其艺术，则予以小钱为赏。地产细绵布，舶人以锡易之。",
+  translation:"This country is located south to Daxiang mountain[2], around it occupies tens of miles. The land is infertile, suitable for growing beans. The climate gets cold suddenly, and people here are a little unkind. Men and women have small and dark bodies, their eyes round and ears long; their hands reach below their knees. They cover their body with silken single-layer quilt. All folk women have slender shape. When they are seven years old, their parents teach them singing and dancing, their bodies fold and whirl, changing into many different phases, and is worth a see. If they go to other countries and showcase the skill, then (the foreign people) will give them some money as reward. This land produces fine cotton cloth, and mariners exchange it with tin .",
+  annotation:"[1]Fujita identifies it to be Banavasi; Su agrees and claims that Wang probably went to Honavar, the major port of Banavasi, and recorded the country’s name instead of the port’s name. <br>[2]Su mentions that there is an island Baswaraj Drug near Honavar, and on that island there is a village Dhareswar, and Daxiang Mountain’s pronounciation could be derived from here."
+},
+{
+  id: "83",
+  chapter:"Calicut",
+  name_zh:"古里佛",
+  name_pinyin: "Gulifo[1]",
+  lat:11.2587,
+  lng:75.7804,
+  status:"likely",
+  original_text:"当巨海之要冲，去僧加剌密迩，亦西洋诸番之马头也。山横而田瘠，宜种麦。每岁藉乌爹米至。行者让路，道不拾遗，俗稍近古。其法致谨，盗一牛，酋长以牛头为准，失主仍以犯人家产藉没而戮之。官场居深山中，海滨为市，以通贸易。地产胡椒，亚于下里，人间俱有仓廪贮之。每播荷三百七十五斤，税收十分之二。次加张叶、皮桑布、蔷薇水、菠萝蜜、孩儿茶。其珊瑚、珍珠、乳香诸等货，皆由甘埋里、佛朗来也。去货与小嗰喃国同。蓄好马，自西极来，故以舶载至此国。每匹互易，动金钱千百，或至四千为率。否则番人议其国空乏也。",
+  translation:"(This country is) At the significant crossroad of the giant sea, close to Sengjiala[2], and is the port of the many countries of the Western Ocean. The mountains are large and the land is infertile, suitable for growing wheat. Every year, rice comes from Wudie[3]. Pedestrians give way to others; no one picks up lost property on the road; their habits are slightly like the ancients[4]. Their law is very strict; if someone steals an ox, the chief takes the ox’s head as the standard (of evidence); the victim still confiscates all the thief’s household property and execute them[5]. The government office is deep in the mountain; the beach is the market for trading. The land produces pepper inferior to those of Xiali[6]; people all have private storehouses to store them. For every three-hundred and seventy-five Bohe pounds [7], the tax is two-tenths. In addition, there are Zhangye[8], Pisang cloth, Qiangwei shui , Jackfruit, and Catechu. Their coral, pearl, frankincense and other goods are all from Ganmaili[9] and Fulang[10] . (Our) Exported goods (to this country) is the same as those in Little Genan[11] . (People in this country) Raise good horses that come from the western end[12], thus (they) use ships to carry (the horses) to this country. For each horse’s transaction (with other countries), it usually costs thousands or hundreds of coins, some even reaches four thousand, or else the people would talk about the (buyer) country’s financial weakness.",
+  annotation:"[1]Fujita identifies it to be Quilon, while Su rejects this and identifies Gulifo to be Calicut, mainly because the same name is also mentioned in Ma Huan's work, and that Ma Huan describes Gulifo to be North-western of Cochin. <br>[2]Sri Lanka, as mentioned in other chapters.[3]Unidentified. [4]Wang's attitude towards those habits is possitive. [5]Ibn Battuta also mentions that the law is very strict in Calicut. [6] Detailed in another chapter. [7] Bhar, the local unit of weight. [8] Coconut leaves. [9] Possibly Hormuz, detailed in another chapter. <br>[10] Not identified. <br>[11] Possibly Kollam, detailed in another chapter. <br>[12]Possibly Hormuz, mentioned in a later chapter of the book. Also, the description that the horses arrive in ships appears in the chapter for Hormuz. This horse-buying phenomenon is not uncommon from 12 to 14th century when 'horsemania' was seen across the Eurasia continent, and Calicut as a connective hub certainly played a vital role in the global trade of horses. "
+},
+{
+  id: "82",
+  chapter:"Kollam(Quilon)",
+  name_zh:"小㖵喃",
+  name_pinyin: "Little Genan[1]",
+  lat:8.9039262,
+  lng:76.5124417,
+  status:"likely",
+  original_text:"地与都拦礁相近，厥土黑坟，本宜榖麦，居民懒事耕作，岁藉乌爹运米供给。或风信到迟，马船已去，货载不满；风信或逆，不得过喃𭇹哩洋，且防高浪阜中卤股石之厄,所以此地驻冬，候下年八九月马船复来，移船回古里佛互市。风俗男女衣着与古里佛同。有村主，无酋长。地产胡椒、椰子、摈榔、溜鱼。贸易之货用金钱、青白花器、八丹布、五色缎、铁器之属。",
+  translation:"(This country is) close to Dulan Reef, the land is black and fertile, should be suitable for growing grains and wheat. The inhabitants are disinclined to farming; each year they rely on Wudie  to bring rice and supply them. Sometimes the monsoon arrives late, and the horse ships[2] have already gone, the loaded goods are not enough; the wind direction is sometimes adverse, (and the mariners) cannot pass the  Nanwuli Ocean , and to prevent the accident caused by coral reefs[3]  in Gaolangfu[4] , they stay here for the winter, and wait until next year’s August or September when the horse ships come back, and they move their ships back to Gulifo and trade (with other countries). (Local people’s) Habits and the clothes of men and women are the same as Gulifo. There are village heads but no tribal chiefs.  The land produces pepper, coconut, betel nut, and liu fish[] . Goods used in trade are golden and silver coins, blue-and-white porcelain, badan cloth, five-colored silk, ironware and such things.",
+  annotation:"[1]Historically, Genan has been the translation for Quilon, and what confused the scholars was the 'Little' in front of Genan. Fujita believes this is Fandarina, which Su rejects because of the existence of Bandali chapter that was more likely to be Fandarina; Su identifies Little Genan to be Quilon as well, because in Malabar, only Quilon would satisfy all descriptions about Little Genan. 'Little Genan' in this book and 'Genan' in other books refer to the same place. <br>[2]Literally “horse ships”, a special large ship that is speedy, mentioned in the Ganmaili (possibly Hormuz) chapter: “take advantage of the wind and set the sails…it takes two months (or, by February) to arrive at Little Genan…in this land (Ganmaili) a ship is built called ‘horse ship’, larger than merchants’ ships…” <br>[3]“lu gu shi” is a unique word that appears only in this book. There is a word in present day Fujian Province dialect pronounced “loo-koo-shi” meaning coral stone, and since Wang started his sailing from Zaiton, Fujian, he might have worked with some Fujianese sailors. It should be reasonable to interpret this “lu gu shi” as an early version of this dialect word for coral reef. <br>[4]Gaolangfu, sometimes written as Gaolangbu, is mentioned in a previous chapter, possibly Colombo. Chen misreads Gaolangfu as Gaolang (high waves) and translates this sentence as “to prevent high waves and coral reefs”<br>[5]Likely to be the dried fish mentioned in Beiliu(Maldives)."
+},
+{
+  id: "86",
+  chapter:"Bombay",
+  name_zh:"放拜",
+  name_pinyin: "Fangbai[1]",
+  lat:19.0817587,
+  lng:72.7135437,
+  status:"unidentified",
+  original_text:"居巴隘乱石之间，渡桥出入，周围无田，平旷皆陆地，宜种麦。气候常暖，风俗质朴。男女面长，目反白，容黑如漆。编发为绳，穿斜纹木绵长衫。煮海为盐，煆鹅卵石为炭以代炊。有酋长。地产绝细布疋，阔七尺，长丈余；大槟榔为诸番之冠。货用金、蚆子、红白烧珠之属。",
+  translation:"(This country is) among the random stones of Ba-ai ; (we) go in and out through a bridge. There are no farms around; the flat and open land is all uncultivated terrain; (the land is) suitable for growing wheat. The climate is always warm, and (local people’s) habits are simple. Men and women have long faces, their eyes extra white , their faces dark as lacquer. They weave their hair to make ropes; they wear long robes with twill cotton. They boil the seawater to produce salt, and roast the pebble in place of charcoal for cooking. There is a tribal chief. The land produces extremely fine cloth, seven chi  wide and more than one zhang long; the large betel nuts are the best among all countries. They trade with gold, shell, red-and-white broil beads and such things.",
+  annotation:"[1]Fujita and Su both identifies it to be the present-day Mumbai: Su identified that this Fangbai is likely to be Kukin Tana mentioned by Ibn Battuta. <br>"
+},
+/*
+{
+  id: "no",
+  chapter:"somewhere",
+  name_zh:"标题",
+  name_pinyin: "biaoti",
+  lat:0.00,
+  lng:0.00,
+  status:"likely/unidentified",
+  original_text:"text",
+  translation:"translation",
+  annotation:"annotation"
+},
+*/
+];
+
+
+const bounds = L.latLngBounds(LOCATIONS.map(p => [p.lat, p.lng]));
+
+const map = L.map('map', {
+  zoomControl: false,
+  attributionControl: true
+});
+map.fitBounds(bounds, { padding: [80, 80] });
+
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+  attribution: '&copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+  maxZoom: 16
+}).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 16
+}).addTo(map);
+
+const panel = document.getElementById('panel');
+const panelBody = document.getElementById('panel-body');
+document.getElementById('panel-close').onclick = () => panel.classList.remove('open');
+
+
+// About page: open / close
+const aboutOverlay = document.getElementById('about-overlay');
+document.getElementById('about-btn').onclick = () => {
+  aboutOverlay.classList.add('open');
+  aboutOverlay.scrollTop = 0;
+};
+document.getElementById('about-close').onclick = () => aboutOverlay.classList.remove('open');
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') aboutOverlay.classList.remove('open');
+});
+
+
+function openPanel(loc) {
+  const statusLabel = loc.status === 'likely' ? 'Likely' : 'unidentified';
+  const statusClass = loc.status === 'likely' ? '' : 'unidentified';
+
+  let html = `
+    <div class="panel-header">
+      <div class="panel-eyebrow">${loc.chapter}</div>
+      <h2>${loc.name_zh}</h2>
+      ${loc.name_pinyin ? `<div class="name-pinyin">${loc.name_pinyin}</div>` : ''}
+      <span class="status-badge ${statusClass}">${statusLabel}</span>
+    </div>
+  `;
+
+  if (loc.original_text) {
+    html += `
+      <div class="panel-section">
+        <h3>Original Text</h3>
+        <div class="text-original">${loc.original_text}</div>
+      </div>
+    `;
+  }
+
+  html += `
+    <div class="panel-section">
+      <h3>Translation</h3>
+      <div class="text-translation">${loc.translation}</div>
+    </div>
+    <div class="panel-section">
+      <h3>Annotation</h3>
+      <div class="annotation">${loc.annotation}</div>
+      <div style="white-space: pre-line;">
+    </div>
+  `;
+
+  panelBody.innerHTML = html;
+  panel.classList.add('open');
+}
+
+LOCATIONS.forEach((loc, idx) => {
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="position:relative;">
+             <div class="marker-number">${loc.id}</div>
+             <div class="place-marker ${loc.status}"></div>
+           </div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7]
+  });
+
+  const marker = L.marker([loc.lat, loc.lng], { icon }).addTo(map);
+
+  marker.bindPopup(`
+    <div class="popup-title">${loc.chapter}</div>
+    <div class="popup-hint">${loc.name_pinyin} →</div>
+  `, { closeButton: false, offset: [0, -6] });
+
+  marker.on('mouseover', () => marker.openPopup());
+  marker.on('mouseout', () => marker.closePopup());
+  marker.on('click', () => openPanel(loc));
+});
+</script>
+</body>
+</html>
